@@ -135,3 +135,23 @@ test('checkmate and agreed-draw outcomes are visible and can be followed by a fr
   assert.match(await page.locator('#result').textContent(), /Draw by agreement/);
   await context.close();
 });
+
+test('capture charcoal desktop and narrow renders in both system appearances', { skip: !canLaunch || !['BROWSER_CHESS_CAPTURE_DARK_DESKTOP','BROWSER_CHESS_CAPTURE_LIGHT_DESKTOP','BROWSER_CHESS_CAPTURE_DARK_NARROW','BROWSER_CHESS_CAPTURE_LIGHT_NARROW'].every((key) => process.env[key]) }, async () => {
+  const desktop = await newPage({ colorScheme: 'dark' });
+  assert.equal(await desktop.page.locator('html').evaluate((el) => getComputedStyle(el).getPropertyValue('--page').trim()), '#17191a');
+  await desktop.page.screenshot({ path: process.env.BROWSER_CHESS_CAPTURE_DARK_DESKTOP, fullPage: true });
+  await desktop.page.emulateMedia({ colorScheme: 'light' });
+  assert.equal(await desktop.page.locator('html').evaluate((el) => getComputedStyle(el).getPropertyValue('--page').trim()), '#272624');
+  await desktop.page.screenshot({ path: process.env.BROWSER_CHESS_CAPTURE_LIGHT_DESKTOP, fullPage: true });
+  await desktop.context.close();
+
+  const narrow = await newPage({ viewport: { width: 375, height: 812 }, isMobile: true, hasTouch: true, colorScheme: 'dark' });
+  const rankCoordinate = narrow.page.locator('#board [data-square="a8"] .rank-coord');
+  assert.equal(await rankCoordinate.evaluate((el) => getComputedStyle(el).fontSize), '10px');
+  assert.equal(await rankCoordinate.evaluate((el) => getComputedStyle(el).backgroundColor), 'rgba(23, 24, 23, 0.875)');
+  await narrow.page.screenshot({ path: process.env.BROWSER_CHESS_CAPTURE_DARK_NARROW, fullPage: true });
+  await narrow.page.emulateMedia({ colorScheme: 'light' });
+  await narrow.page.screenshot({ path: process.env.BROWSER_CHESS_CAPTURE_LIGHT_NARROW, fullPage: true });
+  assert.equal(await narrow.page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+  await narrow.context.close();
+});
