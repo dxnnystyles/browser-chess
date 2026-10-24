@@ -82,7 +82,9 @@ function intendedPosition(chess, intendedMove) {
 
 export function intendedMoveClaim(chess, move) {
   const intended = intendedPosition(chess, move);
-  if (gameOutcome(intended.chess)) return null;
+  // The claim is made before the declared move is played, so an otherwise
+  // claimable fifty-move threshold remains valid even if that move is mate.
+  // Once played, gameOutcome still gives checkmate precedence over auto draws.
   const reasons = claimableDrawReasons(intended.chess);
   return reasons.length ? { ...intended, reasons } : null;
 }

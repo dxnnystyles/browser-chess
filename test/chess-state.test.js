@@ -130,6 +130,18 @@ test('intended-move claims validate the exact move and leave the original positi
   assert.throws(() => intendedMoveClaim(fifty, { from: 'a1', to: 'a2', promotion: 'q' }), /legal/);
   assert.throws(() => intendedMoveClaim(fifty, { from: 'a1', to: 'b2' }), /legal/);
 
+  const matingFifty = new Chess('7k/8/5KQ1/8/8/8/8/8 w - - 99 50');
+  const matingFen = matingFifty.fen();
+  const matingHistory = matingFifty.history({ verbose: true });
+  const matingIntent = intendedMoveClaim(matingFifty, { from: 'g6', to: 'g7' });
+  assert.equal(matingIntent.san, 'Qg7#');
+  assert.deepEqual(matingIntent.reasons, ['fifty-move']);
+  assert.equal(claimDraw(matingFifty, 'fifty-move', 'intended', matingIntent.move).basis, 'intended');
+  assert.equal(matingFifty.fen(), matingFen, 'claiming before the intended mate must preserve the current position');
+  assert.deepEqual(matingFifty.history({ verbose: true }), matingHistory);
+  const playedMate = new Chess(matingFen); playedMate.move({ from: 'g6', to: 'g7' });
+  assert.equal(gameOutcome(playedMate).kind, 'checkmate', 'a played checkmate takes precedence over automatic draw rules');
+
   const promotion = new Chess('7k/P7/8/8/8/8/8/7K w - - 99 50');
   assert.throws(() => intendedMoveClaim(promotion, { from: 'a7', to: 'a8' }), /legal/, 'promotion must name the selected piece');
   assert.equal(intendedMoveClaim(promotion, { from: 'a7', to: 'a8', promotion: 'n' }), null);
