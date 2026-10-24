@@ -149,26 +149,54 @@ test('checkmate and agreed-draw outcomes are visible and can be followed by a fr
 
 test('capture charcoal desktop and narrow renders in both system appearances', { skip: !canLaunch || !['BROWSER_CHESS_CAPTURE_DARK_DESKTOP','BROWSER_CHESS_CAPTURE_LIGHT_DESKTOP','BROWSER_CHESS_CAPTURE_DARK_NARROW','BROWSER_CHESS_CAPTURE_LIGHT_NARROW'].every((key) => process.env[key]) }, async () => {
   const desktop = await newPage({ colorScheme: 'dark' });
-  await desktop.page.locator('#board [data-square="e2"]').click(); await desktop.page.locator('#board [data-square="e4"]').click();
+  const desktopE2 = desktop.page.locator('#board [data-square="e2"]');
+  await desktopE2.focus(); await desktop.page.keyboard.press('Enter'); await desktop.page.keyboard.press('ArrowUp'); await desktop.page.keyboard.press('Enter');
+  await assertKeyboardEndpointState(desktop.page);
   assert.equal(await desktop.page.locator('html').evaluate((el) => getComputedStyle(el).getPropertyValue('--page').trim()), '#17191a');
-  assert.equal(await desktop.page.locator('#move-list [aria-current="step"]').textContent(), 'e4');
   await desktop.page.screenshot({ path: process.env.BROWSER_CHESS_CAPTURE_DARK_DESKTOP, fullPage: true });
-  await desktop.page.emulateMedia({ colorScheme: 'light' });
-  assert.equal(await desktop.page.locator('html').evaluate((el) => getComputedStyle(el).getPropertyValue('--page').trim()), '#272624');
-  await desktop.page.screenshot({ path: process.env.BROWSER_CHESS_CAPTURE_LIGHT_DESKTOP, fullPage: true });
   await desktop.context.close();
 
+  const lightDesktop = await newPage({ colorScheme: 'light' });
+  const lightDesktopE2 = lightDesktop.page.locator('#board [data-square="e2"]');
+  await lightDesktopE2.focus(); await lightDesktop.page.keyboard.press('Enter'); await lightDesktop.page.keyboard.press('ArrowUp'); await lightDesktop.page.keyboard.press('Enter');
+  await assertKeyboardEndpointState(lightDesktop.page);
+  assert.equal(await lightDesktop.page.locator('html').evaluate((el) => getComputedStyle(el).getPropertyValue('--page').trim()), '#272624');
+  await lightDesktop.page.screenshot({ path: process.env.BROWSER_CHESS_CAPTURE_LIGHT_DESKTOP, fullPage: true });
+  await lightDesktop.context.close();
+
   const narrow = await newPage({ viewport: { width: 375, height: 812 }, isMobile: true, hasTouch: true, colorScheme: 'dark' });
-  await narrow.page.locator('#board [data-square="e2"]').tap(); await narrow.page.locator('#board [data-square="e4"]').tap();
+  const narrowE2 = narrow.page.locator('#board [data-square="e2"]');
+  await narrowE2.focus(); await narrow.page.keyboard.press('Enter'); await narrow.page.keyboard.press('ArrowUp'); await narrow.page.keyboard.press('Enter');
+  await assertKeyboardEndpointState(narrow.page);
   const rankCoordinate = narrow.page.locator('#board [data-square="a8"] .rank-coord');
   assert.equal(await rankCoordinate.evaluate((el) => getComputedStyle(el).fontSize), '10px');
   assert.equal(await rankCoordinate.evaluate((el) => getComputedStyle(el).backgroundColor), 'rgba(23, 24, 23, 0.875)');
   await narrow.page.screenshot({ path: process.env.BROWSER_CHESS_CAPTURE_DARK_NARROW, fullPage: true });
-  await narrow.page.emulateMedia({ colorScheme: 'light' });
-  await narrow.page.screenshot({ path: process.env.BROWSER_CHESS_CAPTURE_LIGHT_NARROW, fullPage: true });
   assert.equal(await narrow.page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
   await narrow.context.close();
+
+  const lightNarrow = await newPage({ viewport: { width: 375, height: 812 }, isMobile: true, hasTouch: true, colorScheme: 'light' });
+  const lightNarrowE2 = lightNarrow.page.locator('#board [data-square="e2"]');
+  await lightNarrowE2.focus(); await lightNarrow.page.keyboard.press('Enter'); await lightNarrow.page.keyboard.press('ArrowUp'); await lightNarrow.page.keyboard.press('Enter');
+  await assertKeyboardEndpointState(lightNarrow.page);
+  await lightNarrow.page.screenshot({ path: process.env.BROWSER_CHESS_CAPTURE_LIGHT_NARROW, fullPage: true });
+  assert.equal(await lightNarrow.page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+  await lightNarrow.context.close();
 });
+
+async function assertKeyboardEndpointState(page) {
+  const origin = page.locator('#board [data-square="e2"]');
+  const destination = page.locator('#board [data-square="e3"]');
+  assert.equal(await origin.evaluate((el) => el.classList.contains('light')), true);
+  assert.equal(await destination.evaluate((el) => el.classList.contains('dark')), true);
+  assert.match(await origin.getAttribute('aria-label'), /last move origin/);
+  assert.match(await destination.getAttribute('aria-label'), /last move destination/);
+  assert.match(await origin.evaluate((el) => getComputedStyle(el).boxShadow), /5px inset.*7px inset/);
+  assert.match(await destination.evaluate((el) => getComputedStyle(el).boxShadow), /5px inset.*7px inset/);
+  assert.equal(await destination.evaluate((el) => el.matches(':focus-visible')), true);
+  assert.equal(await destination.evaluate((el) => getComputedStyle(el).outlineStyle), 'solid');
+  assert.equal(await page.locator('#move-list [aria-current="step"]').textContent(), 'e3');
+}
 
 test('reduced motion keeps replay stepping usable and removes control transitions', { skip: !canLaunch && 'Chromium is not installed; set PLAYWRIGHT_CHROMIUM_EXECUTABLE.' }, async () => {
   const { page, context } = await newPage({ reducedMotion: 'reduce' });
