@@ -138,6 +138,116 @@ test('Opera replay play, pause, forward, back and restart preserve the active sa
   await context.close();
 });
 
+test('current threefold claim requires confirmation and leaves the position unchanged', { skip: !canLaunch && 'Chromium is not installed; set PLAYWRIGHT_CHROMIUM_EXECUTABLE.' }, async () => {
+  const setup = new Chess(); for (const san of ['Nf3','Nf6','Ng1','Ng8','Nf3','Nf6','Ng1','Ng8']) setup.move(san);
+  const seed = { version: 1, moves: setup.history({ verbose: true }).map(({ from, to, promotion }) => ({ from, to, ...(promotion ? { promotion } : {}) })) };
+  const { page, context } = await newPage();
+  await page.evaluate((value) => localStorage.setItem('dxnnystyles.browser-chess.v1', JSON.stringify(value)), seed);
+  await page.reload();
+  assert.equal(await page.locator('#result').isVisible(), false);
+  assert.equal(await page.locator('#claim-draw').isVisible(), true);
+  assert.match(await page.locator('#claim-draw-help').textContent(), /threefold repetition/);
+  const before = await page.evaluate(() => JSON.parse(localStorage.getItem('dxnnystyles.browser-chess.v1')));
+  await page.locator('#claim-draw').click();
+  assert.equal(await page.locator('#current-draw-dialog').evaluate((el) => el.open), true);
+  await page.locator('#cancel-current-draw').click();
+  assert.equal(await page.locator('#result').isVisible(), false);
+  assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('dxnnystyles.browser-chess.v1')).moves.length), before.moves.length);
+  await page.locator('#claim-draw').click();
+  await page.locator('#confirm-current-draw').click();
+  assert.match(await page.locator('#result').textContent(), /Draw claimed by threefold repetition/);
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('dxnnystyles.browser-chess.v1')));
+  assert.equal(saved.drawClaim.basis, 'current');
+  assert.deepEqual(saved.moves, before.moves);
+  await page.reload();
+  assert.match(await page.locator('#result').textContent(), /Draw claimed by threefold repetition/);
+  await context.close();
+});
+
+test('intended threefold claim offers Claim draw or the exact intended move', { skip: !canLaunch && 'Chromium is not installed; set PLAYWRIGHT_CHROMIUM_EXECUTABLE.' }, async () => {
+  const setup = new Chess(); for (const san of ['Nf3','Nf6','Ng1','Ng8','Nf3','Nf6','Ng1']) setup.move(san);
+  const seed = { version: 2, moves: setup.history({ verbose: true }).map(({ from, to, promotion }) => ({ from, to, ...(promotion ? { promotion } : {}) })) };
+  const { page, context } = await newPage();
+  await page.evaluate((value) => localStorage.setItem('dxnnystyles.browser-chess.v1', JSON.stringify(value)), seed);
+  await page.reload();
+  await page.locator('#board [data-square="f6"]').click();
+  await page.locator('#board [data-square="g8"]').click();
+  assert.equal(await page.locator('#intended-draw-dialog').evaluate((el) => el.open), true);
+  assert.match(await page.locator('#intended-draw-copy').textContent(), /Ng8.*threefold repetition/);
+  assert.equal(await page.locator('#play-intended-move').textContent(), 'Play Ng8 instead');
+  assert.equal(await page.locator('#move-list .move-row').count(), 4);
+  assert.match(await page.locator('#board [data-square="f6"]').getAttribute('aria-label'), /Black knight/);
+  const beforeFen = setup.fen();
+  await page.locator('#claim-intended-draw').click();
+  assert.match(await page.locator('#result').textContent(), /Draw claimed by threefold repetition/);
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('dxnnystyles.browser-chess.v1')));
+  assert.equal(saved.drawClaim.basis, 'intended');
+  assert.deepEqual(saved.drawClaim.intendedMove, { from: 'f6', to: 'g8' });
+  assert.deepEqual(saved.moves, seed.moves);
+  assert.equal(saved.moves.length, 7);
+  const after = new Chess(); for (const move of saved.moves) after.move(move);
+  assert.equal(after.fen(), beforeFen, 'claiming the intended move must preserve the active position');
+  assert.match(await page.locator('#board [data-square="f6"]').getAttribute('aria-label'), /Black knight/);
+  assert.match(await page.locator('#board [data-square="g8"]').getAttribute('aria-label'), /Empty/);
+  await page.reload();
+  assert.match(await page.locator('#result').textContent(), /Draw claimed by threefold repetition/);
+  await context.close();
+});
+
+test('playing the intended move applies it once and makes a current claim available', { skip: !canLaunch && 'Chromium is not installed; set PLAYWRIGHT_CHROMIUM_EXECUTABLE.' }, async () => {
+  const setup = new Chess(); for (const san of ['Nf3','Nf6','Ng1','Ng8','Nf3','Nf6','Ng1']) setup.move(san);
+  const seed = { version: 1, moves: setup.history({ verbose: true }).map(({ from, to, promotion }) => ({ from, to, ...(promotion ? { promotion } : {}) })) };
+  const { page, context } = await newPage();
+  await page.evaluate((value) => localStorage.setItem('dxnnystyles.browser-chess.v1', JSON.stringify(value)), seed);
+  await page.reload();
+  await page.locator('#board [data-square="f6"]').click(); await page.locator('#board [data-square="g8"]').click();
+  await page.locator('#play-intended-move').click();
+  assert.equal(await page.locator('#move-list .move-row').count(), 4);
+  assert.match(await page.locator('#board [data-square="g8"]').getAttribute('aria-label'), /Black knight/);
+  assert.equal(await page.locator('#result').isVisible(), false);
+  assert.equal(await page.locator('#claim-draw').isVisible(), true);
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('dxnnystyles.browser-chess.v1')));
+  assert.equal(saved.moves.length, 8);
+  assert.equal(saved.drawClaim, undefined);
+  await context.close();
+});
+
+test('draw offers require both players to move, persist, and need explicit accept or decline', { skip: !canLaunch && 'Chromium is not installed; set PLAYWRIGHT_CHROMIUM_EXECUTABLE.' }, async () => {
+  const { page, context } = await newPage();
+  const offer = page.locator('#draw-agreement');
+  assert.equal(await offer.isDisabled(), true);
+  await page.locator('#board [data-square="e2"]').click(); await page.locator('#board [data-square="e4"]').click();
+  assert.equal(await offer.isDisabled(), true);
+  await page.locator('#board [data-square="e7"]').click(); await page.locator('#board [data-square="e5"]').click();
+  assert.equal(await offer.isDisabled(), false);
+  await offer.click();
+  assert.match(await page.locator('#draw-offer-copy').textContent(), /Black offers a draw/);
+  assert.equal(await page.locator('#accept-draw-offer').isVisible(), true);
+  assert.equal(await page.locator('#decline-draw-offer').isVisible(), true);
+  await page.reload();
+  assert.match(await page.locator('#draw-offer-copy').textContent(), /Black offers a draw/);
+  await page.locator('#decline-draw-offer').click();
+  assert.equal(await page.locator('#draw-offer-response').isVisible(), false);
+  assert.equal((await page.evaluate(() => JSON.parse(localStorage.getItem('dxnnystyles.browser-chess.v1')))).drawOffer, undefined);
+  await offer.click(); await page.locator('#accept-draw-offer').click();
+  assert.match(await page.locator('#result').textContent(), /Draw by agreement/);
+  await page.reload();
+  assert.match(await page.locator('#result').textContent(), /Draw by agreement/);
+  await context.close();
+});
+
+test('a board move clears an unanswered draw offer', { skip: !canLaunch && 'Chromium is not installed; set PLAYWRIGHT_CHROMIUM_EXECUTABLE.' }, async () => {
+  const { page, context } = await newPage();
+  await page.locator('#board [data-square="e2"]').click(); await page.locator('#board [data-square="e4"]').click();
+  await page.locator('#board [data-square="e7"]').click(); await page.locator('#board [data-square="e5"]').click();
+  await page.locator('#draw-agreement').click();
+  await page.locator('#board [data-square="g1"]').click(); await page.locator('#board [data-square="f3"]').click();
+  assert.equal(await page.locator('#draw-offer-response').isVisible(), false);
+  assert.equal((await page.evaluate(() => JSON.parse(localStorage.getItem('dxnnystyles.browser-chess.v1')))).drawOffer, undefined);
+  assert.match(await page.locator('#turn-copy').textContent(), /Black to move/);
+  await context.close();
+});
+
 test('mobile board reflows without horizontal scrolling and supports touch play', { skip: !canLaunch && 'Chromium is not installed; set PLAYWRIGHT_CHROMIUM_EXECUTABLE.' }, async () => {
   const { page, context } = await newPage({ viewport: { width: 375, height: 812 }, isMobile: true, hasTouch: true });
   if (process.env.BROWSER_CHESS_MOBILE_SCREENSHOT) await page.screenshot({ path: process.env.BROWSER_CHESS_MOBILE_SCREENSHOT, fullPage: true });
@@ -190,8 +300,11 @@ test('checkmate and agreed-draw outcomes are visible and can be followed by a fr
   assert.match(await page.locator('#result').textContent(), /Black wins by checkmate/);
   await page.locator('#new-game').click();
   assert.match(await page.locator('#turn-copy').textContent(), /White to move/);
-  page.once('dialog', (dialog) => dialog.accept());
+  await page.locator('#board [data-square="e2"]').click(); await page.locator('#board [data-square="e4"]').click();
+  await page.locator('#board [data-square="e7"]').click(); await page.locator('#board [data-square="e5"]').click();
   await page.locator('#draw-agreement').click();
+  assert.match(await page.locator('#draw-offer-copy').textContent(), /Black offers a draw/);
+  await page.locator('#accept-draw-offer').click();
   assert.match(await page.locator('#result').textContent(), /Draw by agreement/);
   await context.close();
 });

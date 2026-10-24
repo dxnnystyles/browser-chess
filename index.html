@@ -47,7 +47,16 @@
           <div class="result" id="result" hidden></div>
           <div class="controls">
             <button class="primary-button" id="new-game" type="button">New game</button>
+            <button class="quiet-button draw-button" id="claim-draw" type="button" aria-describedby="claim-draw-help" hidden>Claim draw</button>
+            <p class="draw-help" id="claim-draw-help" hidden></p>
             <button class="quiet-button draw-button" id="draw-agreement" type="button">Offer a draw</button>
+            <div class="draw-offer-response" id="draw-offer-response" hidden>
+              <p class="draw-help" id="draw-offer-copy"></p>
+              <div class="draw-offer-actions">
+                <button class="primary-button" id="accept-draw-offer" type="button">Accept draw</button>
+                <button class="quiet-button" id="decline-draw-offer" type="button">Decline</button>
+              </div>
+            </div>
           </div>
         </aside>
       </section>
@@ -85,6 +94,22 @@
     </dialog>
     <dialog id="new-game-dialog" class="choice-dialog" aria-labelledby="new-game-title">
       <form method="dialog"><h2 id="new-game-title">Start a new game?</h2><p>Your current position and move list will be cleared.</p><div class="dialog-actions"><button class="quiet-button" value="cancel">Keep playing</button><button class="primary-button" id="confirm-new" value="new">Start new game</button></div></form>
+    </dialog>
+    <dialog id="intended-draw-dialog" class="choice-dialog" aria-labelledby="intended-draw-title">
+      <h2 id="intended-draw-title">Claim a draw?</h2>
+      <p id="intended-draw-copy"></p>
+      <div class="dialog-actions">
+        <button class="quiet-button" id="claim-intended-draw" type="button">Claim draw</button>
+        <button class="primary-button" id="play-intended-move" type="button">Play move instead</button>
+      </div>
+    </dialog>
+    <dialog id="current-draw-dialog" class="choice-dialog" aria-labelledby="current-draw-title">
+      <h2 id="current-draw-title">Claim a draw?</h2>
+      <p id="current-draw-copy"></p>
+      <div class="dialog-actions">
+        <button class="quiet-button" id="cancel-current-draw" type="button">Keep playing</button>
+        <button class="primary-button" id="confirm-current-draw" type="button">Claim draw</button>
+      </div>
     </dialog>
     <script type="module" src="/src/main.js"></script>
   </body>

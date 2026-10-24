@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Chess } from 'chess.js';
-import { SAVE_VERSION, createGame, createOperaReplay, gameOutcome, offerDraw, restoreGame, serializeGame } from '../src/chess-state.js';
+import { SAVE_VERSION, claimDraw, claimableDrawReasons, createGame, createOperaReplay, gameOutcome, intendedMoveClaim, offerDraw, positionKey, positionKeyHistory, repetitionCount, restoreGame, serializeGame } from '../src/chess-state.js';
 
 test('standard opening, turn, capture and legal move enforcement', () => {
   const chess = new Chess();
@@ -56,15 +56,121 @@ test('all four promotion choices apply', () => {
   }
 });
 
-test('threefold repetition and fifty-move rule end games', () => {
+test('threefold and fifty-move thresholds are claimable and do not end the game automatically', () => {
   const repeated = new Chess();
   for (const move of ['Nf3','Nf6','Ng1','Ng8','Nf3','Nf6','Ng1','Ng8']) repeated.move(move);
   assert.equal(repeated.isThreefoldRepetition(), true);
-  assert.equal(gameOutcome(repeated).kind, 'threefold');
+  assert.equal(repetitionCount(repeated), 3);
+  assert.deepEqual(claimableDrawReasons(repeated), ['threefold']);
+  assert.equal(gameOutcome(repeated), null);
+  assert.equal(claimDraw(repeated, 'threefold').basis, 'current');
   const fifty = new Chess('4k3/8/8/8/8/8/8/R3K3 w - - 99 50');
   fifty.move('Ra2');
   assert.equal(fifty.isDraw(), true);
-  assert.equal(gameOutcome(fifty).kind, 'fifty-move');
+  assert.deepEqual(claimableDrawReasons(fifty), ['fifty-move']);
+  assert.equal(gameOutcome(fifty), null);
+  assert.equal(claimDraw(fifty, 'fifty-move').claimKind, 'fifty-move');
+});
+
+test('position repetition keys include side, castling and legal en passant but exclude clocks', () => {
+  const initial = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+  assert.equal(positionKey(new Chess(initial)), positionKey(new Chess(initial.replace(' 0 1', ' 87 52'))));
+  assert.notEqual(positionKey(new Chess(initial)), positionKey(new Chess(initial.replace(' w ', ' b '))));
+  assert.notEqual(positionKey(new Chess(initial)), positionKey(new Chess(initial.replace('KQkq', 'KQ'))));
+
+  const afterDoublePawnMove = new Chess(); afterDoublePawnMove.move('e4');
+  assert.equal(afterDoublePawnMove.fen().split(' ')[3], '-', 'irrelevant en-passant targets are omitted by the public FEN');
+  const legalEp = new Chess(); for (const san of ['e4','a6','e5','d5']) legalEp.move(san);
+  assert.equal(legalEp.fen().split(' ')[3], 'd6');
+  const noEp = new Chess(legalEp.fen().replace(' d6 ', ' - '));
+  assert.notEqual(positionKey(legalEp), positionKey(noEp));
+  const pinnedEp = new Chess('k7/8/8/r4pPK/8/8/8/8 w - f6 0 1');
+  assert.equal(pinnedEp.fen().split(' ')[3], '-');
+});
+
+test('position keys and counts are rebuilt from legal move history', () => {
+  const repeated = new Chess();
+  for (const move of ['Nf3','Nf6','Ng1','Ng8','Nf3','Nf6','Ng1','Ng8']) repeated.move(move);
+  const keys = positionKeyHistory(repeated);
+  assert.equal(keys.length, repeated.history().length + 1);
+  assert.equal(keys.at(0), keys.at(-1));
+  assert.equal(keys.filter((key) => key === keys.at(-1)).length, 3);
+  assert.equal(repetitionCount(repeated), 3);
+});
+
+test('fivefold repetition and seventy-five moves are automatic draws with mate precedence', () => {
+  const repeated = new Chess();
+  for (let cycle = 0; cycle < 4; cycle++) for (const move of ['Nf3','Nf6','Ng1','Ng8']) repeated.move(move);
+  assert.equal(repetitionCount(repeated), 5);
+  assert.equal(gameOutcome(repeated).kind, 'fivefold');
+  const seventyFive = new Chess('4k3/8/8/8/8/8/8/R3K3 w - - 149 75');
+  seventyFive.move('Ra2');
+  assert.equal(gameOutcome(seventyFive).kind, 'seventy-five-move');
+  const mate = new Chess('7k/6Q1/5K2/8/8/8/8/8 b - - 150 80');
+  assert.equal(mate.isCheckmate(), true);
+  assert.equal(gameOutcome(mate).kind, 'checkmate');
+});
+
+test('intended-move claims validate the exact move and leave the original position untouched', () => {
+  const repeated = new Chess();
+  for (const move of ['Nf3','Nf6','Ng1','Ng8','Nf3','Nf6','Ng1']) repeated.move(move);
+  const before = repeated.fen();
+  const intended = intendedMoveClaim(repeated, { from: 'f6', to: 'g8' });
+  assert.equal(intended.san, 'Ng8');
+  assert.deepEqual(intended.reasons, ['threefold']);
+  assert.equal(repeated.fen(), before);
+  const claim = claimDraw(repeated, 'threefold', 'intended', intended.move);
+  assert.equal(claim.basis, 'intended');
+  assert.deepEqual(claim.intendedMove, { from: 'f6', to: 'g8' });
+
+  const fifty = new Chess('4k3/8/8/8/8/8/8/R3K3 w - - 99 50');
+  const fiftyIntent = intendedMoveClaim(fifty, { from: 'a1', to: 'a2' });
+  assert.equal(fiftyIntent.san, 'Ra2');
+  assert.deepEqual(fiftyIntent.reasons, ['fifty-move']);
+  assert.throws(() => intendedMoveClaim(fifty, { from: 'a1', to: 'a2', promotion: 'q' }), /legal/);
+  assert.throws(() => intendedMoveClaim(fifty, { from: 'a1', to: 'b2' }), /legal/);
+
+  const promotion = new Chess('7k/P7/8/8/8/8/8/7K w - - 99 50');
+  assert.throws(() => intendedMoveClaim(promotion, { from: 'a7', to: 'a8' }), /legal/, 'promotion must name the selected piece');
+  assert.equal(intendedMoveClaim(promotion, { from: 'a7', to: 'a8', promotion: 'n' }), null);
+});
+
+test('save v2 persists and validates current/intended claims and pending draw offers', () => {
+  const repeated = new Chess();
+  for (const move of ['Nf3','Nf6','Ng1','Ng8','Nf3','Nf6','Ng1','Ng8']) repeated.move(move);
+  const currentClaim = claimDraw(repeated, 'threefold');
+  const currentSave = serializeGame(repeated, currentClaim);
+  assert.equal(currentSave.version, 2);
+  assert.equal(currentSave.drawClaim.basis, 'current');
+  assert.equal('repetitionCounts' in currentSave, false);
+  assert.equal(restoreGame(currentSave).savedOutcome.kind, 'claim');
+  assert.throws(() => restoreGame({ ...currentSave, drawClaim: { kind: 'threefold', basis: 'current' }, moves: [] }), /no longer valid/);
+
+  const intendedGame = new Chess();
+  for (const move of ['Nf3','Nf6','Ng1','Ng8','Nf3','Nf6','Ng1']) intendedGame.move(move);
+  const intended = intendedMoveClaim(intendedGame, { from: 'f6', to: 'g8' });
+  const intendedClaim = claimDraw(intendedGame, 'threefold', 'intended', intended.move);
+  const intendedSave = serializeGame(intendedGame, intendedClaim);
+  assert.deepEqual(restoreGame(intendedSave).savedOutcome.intendedMove, { from: 'f6', to: 'g8' });
+  assert.throws(() => restoreGame({ ...intendedSave, drawClaim: { ...intendedSave.drawClaim, intendedMove: { from: 'f6', to: 'e5' } } }), /legal|valid/);
+
+  const offered = new Chess(); offered.move('e4'); offered.move('e5');
+  const offerSave = serializeGame(offered, null, { offeredBy: 'b' });
+  assert.deepEqual(restoreGame(offerSave).savedDrawOffer, { offeredBy: 'b' });
+  assert.throws(() => restoreGame(serializeGame(new Chess(), null, { offeredBy: 'w' })), /invalid/);
+});
+
+test('v1 saves migrate claimable thresholds without auto-accepting them and preserve agreements', () => {
+  const moves = [];
+  const repeated = new Chess();
+  for (const san of ['Nf3','Nf6','Ng1','Ng8','Nf3','Nf6','Ng1','Ng8']) {
+    const move = repeated.move(san); moves.push({ from: move.from, to: move.to });
+  }
+  const migrated = restoreGame({ version: 1, moves });
+  assert.equal(migrated.savedOutcome, null);
+  assert.deepEqual(claimableDrawReasons(migrated), ['threefold']);
+  assert.equal(serializeGame(migrated).version, SAVE_VERSION);
+  assert.equal(restoreGame({ version: 1, moves: [], result: 'agreement' }).savedOutcome.kind, 'agreement');
 });
 
 test('insufficient material and agreement draws are represented', () => {

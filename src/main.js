@@ -1,5 +1,5 @@
 import { Chess } from 'chess.js';
-import { SAVE_KEY, createGame, createOperaReplay, gameOutcome, offerDraw, restoreGame, serializeGame } from './chess-state.js';
+import { SAVE_KEY, claimDraw, claimableDrawReasons, createGame, createOperaReplay, gameOutcome, intendedMoveClaim, offerDraw, restoreGame, serializeGame } from './chess-state.js';
 import './style.css';
 
 const $ = (id) => document.getElementById(id);
@@ -15,6 +15,9 @@ let selected = null;
 let focusSquare = 'e2';
 let mode = 'game';
 let outcome = null;
+let pendingDrawOffer = null;
+let pendingClaimIntent = null;
+let pendingCurrentClaimReasons = null;
 let recoveryBlocked = false;
 let storageWritable = true;
 
@@ -28,7 +31,10 @@ function loadSavedGame() {
   let raw;
   try { raw = storage.getItem(SAVE_KEY); } catch { storageWritable = false; $('save-state').textContent = 'This game will not be saved'; return; }
   if (!raw) return;
-  try { game = restoreGame(raw); outcome = game.savedOutcome ?? gameOutcome(game); }
+  try {
+    game = restoreGame(raw); outcome = game.savedOutcome ?? gameOutcome(game); pendingDrawOffer = game.savedDrawOffer;
+    if (game.savedVersion === 1) persist();
+  }
   catch (error) {
     recoveryBlocked = true;
     $('recovery-message').textContent = `${error.message} The saved data has been kept unchanged. Start a fresh game to continue.`;
@@ -39,7 +45,7 @@ function loadSavedGame() {
 function persist() {
   if (!storage || !storageWritable) return;
   try {
-    storage.setItem(SAVE_KEY, JSON.stringify(serializeGame(game, outcome)));
+    storage.setItem(SAVE_KEY, JSON.stringify(serializeGame(game, outcome, pendingDrawOffer)));
     $('save-state').textContent = 'Saved on this device';
   } catch {
     storageWritable = false;
@@ -50,6 +56,8 @@ function persist() {
 
 function announce(message) { $('announcer').textContent = ''; requestAnimationFrame(() => { $('announcer').textContent = message; }); }
 function turnName(turn) { return turn === 'w' ? 'White' : 'Black'; }
+function drawReasonName(reason) { return reason === 'threefold' ? 'threefold repetition' : reason === 'fifty-move' ? 'the fifty-move rule' : reason; }
+function drawReasonsText(reasons) { return reasons.map(drawReasonName).join(' and '); }
 function squaresFor(chess) {
   const output = [];
   for (let rank = 8; rank >= 1; rank--) for (const file of files) output.push(`${file}${rank}`);
@@ -128,8 +136,23 @@ function showPromotion(from, to) {
 
 function makeMove(from, to, promotion) {
   try {
+    const intended = intendedMoveClaim(game, { from, to, ...(promotion ? { promotion } : {}) });
+    if (intended) {
+      pendingClaimIntent = { move: intended.move, san: intended.san, reasons: intended.reasons };
+      $('intended-draw-copy').textContent = `Playing ${intended.san} would allow a draw by ${drawReasonsText(intended.reasons)}. Claim the draw, or play ${intended.san} instead.`;
+      $('claim-intended-draw').textContent = 'Claim draw';
+      $('play-intended-move').textContent = `Play ${intended.san} instead`;
+      $('intended-draw-dialog').showModal();
+      return;
+    }
+    applyMove(from, to, promotion);
+  } catch { announce('That move is not legal. The board and turn have not changed.'); }
+}
+
+function applyMove(from, to, promotion) {
+  try {
     const move = game.move({ from, to, ...(promotion ? { promotion } : {}) });
-    selected = null; focusSquare = to; outcome = gameOutcome(game);
+    selected = null; focusSquare = to; outcome = gameOutcome(game); pendingDrawOffer = null;
     persist(); render();
     if (promotion) board.querySelector(`[data-square="${focusSquare}"]`)?.focus();
     announce(`${turnName(move.color)} ${move.piece === 'n' ? 'knight' : move.piece} ${move.captured ? 'captures on' : 'moves to'} ${to}.${game.isCheck() ? ` ${turnName(game.turn())} is in check.` : ''}${outcome ? ` ${outcome.text}` : ` ${turnName(game.turn())} to move.`}`);
@@ -174,7 +197,13 @@ function render() {
   $('turn-bar').setAttribute('aria-label', outcome ? outcome.text : `${turnName(game.turn())} to move`);
   $('check-label').hidden = !game.isCheck() || !!outcome;
   $('result').hidden = !outcome; $('result').textContent = outcome?.text ?? '';
-  $('draw-agreement').disabled = !!outcome || !storageWritable && !storage;
+  const claimReasons = outcome ? [] : claimableDrawReasons(game);
+  $('claim-draw').hidden = claimReasons.length === 0;
+  $('claim-draw-help').hidden = claimReasons.length === 0;
+  $('claim-draw-help').textContent = claimReasons.length ? `Claimable now: ${drawReasonsText(claimReasons)}.` : '';
+  $('draw-agreement').disabled = !!outcome || game.history().length < 2 || !!pendingDrawOffer;
+  $('draw-offer-response').hidden = !pendingDrawOffer || !!outcome;
+  $('draw-offer-copy').textContent = pendingDrawOffer ? `${turnName(pendingDrawOffer.offeredBy)} offers a draw.` : '';
   $('draw-agreement').textContent = outcome?.kind === 'agreement' ? 'Draw agreed' : 'Offer a draw';
   $('new-game').textContent = outcome ? 'New game' : 'New game';
   $('replay-panel').hidden = mode !== 'replay';
@@ -183,7 +212,7 @@ function render() {
 }
 
 function startNewGame() {
-  game = new Chess(); outcome = null; selected = null; recoveryBlocked = false; mode = 'game'; persist(); render(); announce('New game. White to move.');
+  game = new Chess(); outcome = null; pendingDrawOffer = null; pendingClaimIntent = null; selected = null; recoveryBlocked = false; mode = 'game'; persist(); render(); announce('New game. White to move.');
 }
 
 $('new-game').addEventListener('click', () => {
@@ -192,9 +221,47 @@ $('new-game').addEventListener('click', () => {
 $('confirm-new').addEventListener('click', (event) => { event.preventDefault(); $('new-game-dialog').close(); startNewGame(); });
 $('recovery-new').addEventListener('click', (event) => { event.preventDefault(); $('recovery-dialog').close(); startNewGame(); });
 $('draw-agreement').addEventListener('click', () => {
-  if (outcome || mode !== 'game') return;
-  if (!window.confirm('Both players agree to end this game as a draw?')) return;
-  outcome = offerDraw(game); persist(); render(); announce(outcome.text);
+  if (outcome || mode !== 'game' || game.history().length < 2 || pendingDrawOffer) return;
+  pendingDrawOffer = { offeredBy: game.history({ verbose: true }).at(-1).color };
+  persist(); render(); announce(`${turnName(pendingDrawOffer.offeredBy)} offers a draw.`);
+});
+$('accept-draw-offer').addEventListener('click', () => {
+  if (!pendingDrawOffer || outcome || mode !== 'game') return;
+  outcome = offerDraw(game); pendingDrawOffer = null; persist(); render(); announce(outcome.text);
+});
+$('decline-draw-offer').addEventListener('click', () => {
+  if (!pendingDrawOffer || outcome || mode !== 'game') return;
+  pendingDrawOffer = null; persist(); render(); announce(`${turnName(game.turn())} declined the draw offer.`);
+});
+$('claim-draw').addEventListener('click', () => {
+  const reasons = claimableDrawReasons(game);
+  if (!reasons.length || outcome || mode !== 'game') return;
+  pendingCurrentClaimReasons = reasons;
+  $('current-draw-copy').textContent = `The current position qualifies for a draw by ${drawReasonsText(reasons)}. Claim it now, or keep playing.`;
+  $('current-draw-dialog').showModal();
+});
+$('current-draw-dialog').addEventListener('cancel', () => { pendingCurrentClaimReasons = null; });
+$('cancel-current-draw').addEventListener('click', () => { pendingCurrentClaimReasons = null; $('current-draw-dialog').close(); });
+$('confirm-current-draw').addEventListener('click', () => {
+  const reasons = pendingCurrentClaimReasons;
+  pendingCurrentClaimReasons = null;
+  $('current-draw-dialog').close();
+  if (!reasons?.length || outcome || mode !== 'game') return;
+  try { outcome = claimDraw(game, reasons[0], 'current'); pendingDrawOffer = null; persist(); render(); announce(outcome.text); }
+  catch { announce('That draw claim is no longer valid. The board and turn have not changed.'); }
+});
+$('intended-draw-dialog').addEventListener('cancel', () => { pendingClaimIntent = null; });
+$('claim-intended-draw').addEventListener('click', () => {
+  if (!pendingClaimIntent) return;
+  try {
+    outcome = claimDraw(game, pendingClaimIntent.reasons[0], 'intended', pendingClaimIntent.move);
+    pendingClaimIntent = null; selected = null; $('intended-draw-dialog').close(); persist(); render(); announce(outcome.text);
+  } catch { pendingClaimIntent = null; $('intended-draw-dialog').close(); announce('That draw claim is no longer valid. The board and turn have not changed.'); }
+});
+$('play-intended-move').addEventListener('click', () => {
+  if (!pendingClaimIntent) return;
+  const { from, to, promotion } = pendingClaimIntent.move;
+  pendingClaimIntent = null; $('intended-draw-dialog').close(); applyMove(from, to, promotion);
 });
 
 function replayPosition(index) { return replay.at(index); }
