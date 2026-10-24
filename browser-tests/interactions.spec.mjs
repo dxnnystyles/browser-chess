@@ -56,17 +56,20 @@ test('keyboard selects a piece and completes a legal move', { skip: !canLaunch &
 
 test('black chess-piece glyph fill keeps at least 3:1 contrast on dark squares', { skip: !canLaunch && 'Chromium is not installed; set PLAYWRIGHT_CHROMIUM_EXECUTABLE.' }, async () => {
   const { page, context } = await newPage();
-  const ratio = await page.locator('#board [data-square="a8"]').evaluate((cell) => {
+  const measurement = await page.locator('#board [data-square="b8"]').evaluate((cell) => {
     const color = (value) => value.match(/[\d.]+/g).slice(0, 3).map(Number);
     const luminance = (value) => {
       const [red, green, blue] = color(value).map((channel) => channel / 255).map((channel) => channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4);
       return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
     };
     const foreground = luminance(getComputedStyle(cell.querySelector('.black-piece')).color);
-    const background = luminance(getComputedStyle(cell).backgroundColor);
-    return (background + 0.05) / (foreground + 0.05);
+    const backgroundColor = getComputedStyle(cell).backgroundColor;
+    const background = luminance(backgroundColor);
+    return { isDarkSquare: cell.classList.contains('dark'), backgroundColor, ratio: (background + 0.05) / (foreground + 0.05) };
   });
-  assert.ok(ratio >= 3, `expected at least 3:1 contrast, got ${ratio.toFixed(2)}:1`);
+  assert.equal(measurement.isDarkSquare, true);
+  assert.equal(measurement.backgroundColor, 'rgb(113, 109, 101)');
+  assert.ok(measurement.ratio >= 3, `expected at least 3:1 contrast on the dark square, got ${measurement.ratio.toFixed(2)}:1`);
   await context.close();
 });
 
