@@ -74,7 +74,7 @@ h1 { font-size: clamp(25px, 3vw, 34px); letter-spacing: -.055em; line-height: 1.
 .square.in-check { box-shadow: inset 0 0 0 5px #a3261b; }
 .piece { position: relative; z-index: 1; display: block; font-family: "Arial Unicode MS", "Noto Sans Symbols 2", "DejaVu Sans", sans-serif; font-size: clamp(27px, 6.3vw, 67px); line-height: 1; user-select: none; }
 .white-piece { color: #f8f4eb; text-shadow: -1px -1px 0 #262522, 1px -1px 0 #262522, -1px 1px 0 #262522, 1px 1px 0 #262522, 0 3px 2px #0006; }
-.black-piece { color: #262724; text-shadow: 0 1px #c8c3b9; }
+.black-piece { color: #20211f; text-shadow: 0 1px #c8c3b9; }
 .coord { position: absolute; z-index: 2; border-radius: 2px; padding: 1px 3px; background: #171817df; color: #fff4e8; font: 700 10px ui-monospace, SFMono-Regular, Consolas, monospace; line-height: 1.2; pointer-events: none; }
 .rank-coord { top: 4px; left: 5px; }
 .file-coord { right: 5px; bottom: 3px; }
