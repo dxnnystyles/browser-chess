@@ -68,6 +68,7 @@ h1 { font-size: clamp(25px, 3vw, 34px); letter-spacing: -.055em; line-height: 1.
 .square.dark { background: var(--board-dark); }
 .square.selected { box-shadow: inset 0 0 0 4px var(--accent); }
 .square.last-move::before { position: absolute; inset: 0; background: #d8794355; content: ""; pointer-events: none; }
+.square.last-move { box-shadow: inset 0 0 0 5px #171817, inset 0 0 0 7px #fff4e8; }
 .square.legal-target::after { position: absolute; width: 26%; aspect-ratio: 1; border-radius: 100%; background: #21201c77; content: ""; }
 .square.capture-target::after { width: 82%; border: 4px solid #d87943; background: transparent; }
 .square.in-check { box-shadow: inset 0 0 0 5px #a3261b; }
@@ -92,6 +93,7 @@ h1 { font-size: clamp(25px, 3vw, 34px); letter-spacing: -.055em; line-height: 1.
 .move-number { color: var(--muted); }
 .empty-moves { padding: 9px 7px; color: var(--muted); font-size: 12px; }
 .active-move { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--ink); }
+.current-move { border-bottom: 2px solid var(--accent); font-weight: 700; text-decoration: underline; text-decoration-color: var(--ink); text-decoration-thickness: 1px; text-underline-offset: 3px; }
 .result { margin: 0 0 14px; border-left: 2px solid var(--accent); padding: 9px 11px; font-size: 12px; line-height: 1.5; }
 .controls { display: grid; gap: 8px; margin-top: auto; padding-top: 16px; }
 .controls > button { width: 100%; text-align: left; }

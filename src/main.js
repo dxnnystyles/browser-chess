@@ -60,6 +60,7 @@ function legalFrom(chess, square) { return chess.moves({ square, verbose: true }
 function renderBoard(target, chess, interactive, index = 0) {
   target.replaceChildren();
   const legal = interactive && selected ? legalFrom(chess, selected) : [];
+  const last = chess.history({ verbose: true }).at(-1);
   for (const square of squaresFor(chess)) {
     if (files.indexOf(square[0]) === 0) {
       const row = document.createElement('div'); row.setAttribute('role', 'row'); row.className = 'board-row'; target.append(row);
@@ -74,11 +75,13 @@ function renderBoard(target, chess, interactive, index = 0) {
     if (square[0] === 'a') { const rankMark = document.createElement('span'); rankMark.className = 'coord rank-coord'; rankMark.setAttribute('aria-hidden','true'); rankMark.textContent = square[1]; cell.append(rankMark); }
     if (interactive && square === selected) cell.classList.add('selected');
     if (legal.includes(square)) { cell.classList.add('legal-target'); if (piece) cell.classList.add('capture-target'); }
-    const last = chess.history({ verbose: true }).at(-1);
-    if (last && (square === last.from || square === last.to)) cell.classList.add('last-move');
+    const isLastOrigin = last?.from === square;
+    const isLastDestination = last?.to === square;
+    if (isLastOrigin || isLastDestination) cell.classList.add('last-move', isLastOrigin ? 'last-move-origin' : 'last-move-destination');
     if (interactive && chess.isCheck() && piece?.type === 'k' && piece.color === chess.turn()) cell.classList.add('in-check');
     const squareLabel = `${square[0].toUpperCase()}${square[1]}`;
-    cell.setAttribute('aria-label', `${piece ? `${turnName(piece.color)} ${piece.type === 'n' ? 'knight' : ({ k:'king',q:'queen',r:'rook',b:'bishop',p:'pawn' }[piece.type])}` : 'Empty'}, ${squareLabel}${interactive && legal.includes(square) ? ', legal destination' : ''}${interactive && square === selected ? ', selected' : ''}`);
+    const endpointRole = isLastOrigin ? ', last move origin' : isLastDestination ? ', last move destination' : '';
+    cell.setAttribute('aria-label', `${piece ? `${turnName(piece.color)} ${piece.type === 'n' ? 'knight' : ({ k:'king',q:'queen',r:'rook',b:'bishop',p:'pawn' }[piece.type])}` : 'Empty'}, ${squareLabel}${endpointRole}${interactive && legal.includes(square) ? ', legal destination' : ''}${interactive && square === selected ? ', selected' : ''}`);
     cell.tabIndex = square === (target === replayBoard ? 'e4' : focusSquare) ? 0 : -1;
     if (interactive) cell.addEventListener('click', () => onSquare(square));
     cell.addEventListener('keydown', (event) => onBoardKey(event, square, interactive));
@@ -133,7 +136,7 @@ function makeMove(from, to, promotion) {
   } catch { announce('That move is not legal. The board and turn have not changed.'); }
 }
 
-function renderMoves(chess, list, activeSan = null) {
+function renderMoves(chess, list, currentMoveIndex = -1) {
   const history = chess.history(); list.replaceChildren();
   if (!history.length) { const empty = document.createElement('li'); empty.className = 'empty-moves'; empty.textContent = 'Moves will appear here.'; list.append(empty); return; }
   for (let i = 0; i < history.length; i += 2) {
@@ -141,7 +144,9 @@ function renderMoves(chess, list, activeSan = null) {
     const number = document.createElement('span'); number.className = 'move-number'; number.textContent = `${Math.floor(i / 2) + 1}.`;
     const white = document.createElement('span'); white.textContent = history[i];
     const black = document.createElement('span'); black.textContent = history[i + 1] ?? '';
-    row.append(number, white, black); if (activeSan && history.slice(0, i + 2).at(-1) === activeSan) row.classList.add('active-move'); list.append(row);
+    if (currentMoveIndex === i) { white.classList.add('current-move'); white.setAttribute('aria-current', 'step'); row.classList.add('active-move'); }
+    if (currentMoveIndex === i + 1) { black.classList.add('current-move'); black.setAttribute('aria-current', 'step'); row.classList.add('active-move'); }
+    row.append(number, white, black); list.append(row);
   }
 }
 
@@ -164,7 +169,7 @@ function render() {
   const keepBoardFocus = board.contains(document.activeElement);
   const gameVisible = mode === 'game'; $('game-section').hidden = !gameVisible; $('board-frame').hidden = !gameVisible;
   $('turn-bar').hidden = !gameVisible; $('board-help').hidden = !gameVisible;
-  renderBoard(board, game, true); renderMoves(game, $('move-list')); renderMaterial();
+  renderBoard(board, game, true); renderMoves(game, $('move-list'), game.history().length - 1); renderMaterial();
   $('turn-copy').textContent = outcome ? outcome.text : `${turnName(game.turn())} to move`;
   $('turn-bar').setAttribute('aria-label', outcome ? outcome.text : `${turnName(game.turn())} to move`);
   $('check-label').hidden = !game.isCheck() || !!outcome;
@@ -195,7 +200,7 @@ $('draw-agreement').addEventListener('click', () => {
 function replayPosition(index) { return replay.at(index); }
 function renderReplay() {
   const position = replayPosition(replayIndex); renderBoard(replayBoard, position, false, replayIndex);
-  renderMoves(position, $('replay-moves'));
+  renderMoves(position, $('replay-moves'), replayIndex - 1);
   const moveNumber = Math.ceil(replayIndex / 2); const san = replayIndex ? replay.moves[replayIndex - 1] : null;
   $('replay-progress').textContent = replayIndex === 0 ? 'Starting position' : replayIndex === replay.moves.length ? `Checkmate · ${moveNumber} moves` : `${turnName(position.turn())} to move · ${san}`;
   $('replay-start').textContent = replayTimer ? 'Pause' : 'Play';

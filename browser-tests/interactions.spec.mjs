@@ -33,6 +33,10 @@ test('pointer moves a legal pawn and a reload restores the position', { skip: !c
   await page.locator('#board [data-square="e2"]').click();
   await page.locator('#board [data-square="e4"]').click();
   assert.match(await page.locator('#turn-copy').textContent(), /Black to move/);
+  assert.match(await page.locator('#board [data-square="e2"]').getAttribute('aria-label'), /last move origin/);
+  assert.match(await page.locator('#board [data-square="e4"]').getAttribute('aria-label'), /last move destination/);
+  assert.match(await page.locator('#board [data-square="e4"]').evaluate((el) => getComputedStyle(el).boxShadow), /5px inset.*7px inset/);
+  assert.equal(await page.locator('#move-list [aria-current="step"]').textContent(), 'e4');
   await page.reload();
   assert.match(await page.locator('#turn-copy').textContent(), /Black to move/);
   assert.match(await page.locator('#board [data-square="e4"]').getAttribute('aria-label'), /White pawn/);
@@ -45,6 +49,8 @@ test('keyboard selects a piece and completes a legal move', { skip: !canLaunch &
   await page.keyboard.press('ArrowUp'); await page.keyboard.press('ArrowUp'); await page.keyboard.press('Enter');
   assert.match(await page.locator('#turn-copy').textContent(), /Black to move/);
   assert.equal(await page.evaluate(() => document.activeElement?.dataset.square), 'e4');
+  assert.equal(await page.locator('#board [data-square="e4"]').evaluate((el) => el.matches(':focus-visible')), true);
+  assert.equal(await page.locator('#board [data-square="e4"]').evaluate((el) => getComputedStyle(el).outlineStyle), 'solid');
   await context.close();
 });
 
@@ -72,6 +78,11 @@ test('Opera replay is separate and leaves the saved match intact', { skip: !canL
   assert.match(await page.locator('#replay-progress').textContent(), /Starting position/);
   await page.locator('#replay-next').click();
   assert.equal(await page.locator('#replay-board [data-square]').count(), 64);
+  assert.equal(await page.locator('#replay-moves [aria-current="step"]').textContent(), 'e4');
+  assert.match(await page.locator('#replay-board [data-square="e2"]').getAttribute('aria-label'), /last move origin/);
+  assert.match(await page.locator('#replay-board [data-square="e4"]').getAttribute('aria-label'), /last move destination/);
+  await page.locator('#replay-next').click();
+  assert.equal(await page.locator('#replay-moves [aria-current="step"]').textContent(), 'e5');
   await page.getByRole('button', { name: 'Return to your game' }).click();
   assert.match(await page.locator('#turn-copy').textContent(), /Black to move/);
   assert.equal(await page.evaluate(() => localStorage.getItem('dxnnystyles.browser-chess.v1')), before);
@@ -138,7 +149,9 @@ test('checkmate and agreed-draw outcomes are visible and can be followed by a fr
 
 test('capture charcoal desktop and narrow renders in both system appearances', { skip: !canLaunch || !['BROWSER_CHESS_CAPTURE_DARK_DESKTOP','BROWSER_CHESS_CAPTURE_LIGHT_DESKTOP','BROWSER_CHESS_CAPTURE_DARK_NARROW','BROWSER_CHESS_CAPTURE_LIGHT_NARROW'].every((key) => process.env[key]) }, async () => {
   const desktop = await newPage({ colorScheme: 'dark' });
+  await desktop.page.locator('#board [data-square="e2"]').click(); await desktop.page.locator('#board [data-square="e4"]').click();
   assert.equal(await desktop.page.locator('html').evaluate((el) => getComputedStyle(el).getPropertyValue('--page').trim()), '#17191a');
+  assert.equal(await desktop.page.locator('#move-list [aria-current="step"]').textContent(), 'e4');
   await desktop.page.screenshot({ path: process.env.BROWSER_CHESS_CAPTURE_DARK_DESKTOP, fullPage: true });
   await desktop.page.emulateMedia({ colorScheme: 'light' });
   assert.equal(await desktop.page.locator('html').evaluate((el) => getComputedStyle(el).getPropertyValue('--page').trim()), '#272624');
@@ -146,6 +159,7 @@ test('capture charcoal desktop and narrow renders in both system appearances', {
   await desktop.context.close();
 
   const narrow = await newPage({ viewport: { width: 375, height: 812 }, isMobile: true, hasTouch: true, colorScheme: 'dark' });
+  await narrow.page.locator('#board [data-square="e2"]').tap(); await narrow.page.locator('#board [data-square="e4"]').tap();
   const rankCoordinate = narrow.page.locator('#board [data-square="a8"] .rank-coord');
   assert.equal(await rankCoordinate.evaluate((el) => getComputedStyle(el).fontSize), '10px');
   assert.equal(await rankCoordinate.evaluate((el) => getComputedStyle(el).backgroundColor), 'rgba(23, 24, 23, 0.875)');
@@ -154,4 +168,18 @@ test('capture charcoal desktop and narrow renders in both system appearances', {
   await narrow.page.screenshot({ path: process.env.BROWSER_CHESS_CAPTURE_LIGHT_NARROW, fullPage: true });
   assert.equal(await narrow.page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
   await narrow.context.close();
+});
+
+test('reduced motion keeps replay stepping usable and removes control transitions', { skip: !canLaunch && 'Chromium is not installed; set PLAYWRIGHT_CHROMIUM_EXECUTABLE.' }, async () => {
+  const { page, context } = await newPage({ reducedMotion: 'reduce' });
+  assert.equal(await page.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches), true);
+  await page.getByRole('button', { name: 'Replay the Opera Game' }).click();
+  const transitionDuration = await page.locator('#replay-next').evaluate((el) => getComputedStyle(el).transitionDuration);
+  assert.ok(Number.parseFloat(transitionDuration) <= 0.001, `expected reduced transition, got ${transitionDuration}`);
+  await page.locator('#replay-next').click();
+  assert.match(await page.locator('#replay-progress').textContent(), /Black to move/);
+  assert.equal(await page.locator('#replay-moves [aria-current="step"]').textContent(), 'e4');
+  await page.locator('#replay-next').click();
+  assert.equal(await page.locator('#replay-moves [aria-current="step"]').textContent(), 'e5');
+  await context.close();
 });
