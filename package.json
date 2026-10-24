@@ -1,0 +1,33 @@
+{
+  "name": "browser-chess",
+  "version": "1.0.0",
+  "description": "",
+  "private": true,
+  "type": "module",
+  "main": "src/main.js",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "test": "node --test",
+    "test:browser": "node --test browser-tests/interactions.spec.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dxnnystyles/browser-chess.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "UNLICENSED",
+  "bugs": {
+    "url": "https://github.com/dxnnystyles/browser-chess/issues"
+  },
+  "homepage": "https://github.com/dxnnystyles/browser-chess#readme",
+  "dependencies": {
+    "chess.js": "^1.4.0"
+  },
+  "devDependencies": {
+    "playwright": "^1.64.1",
+    "vite": "^8.3.5"
+  }
+}

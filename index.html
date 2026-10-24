@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#17191a" />
+    <meta name="description" content="A quiet, complete chessboard for two players at one screen." />
+    <title>Chess — Danny Styles</title>
+  </head>
+  <body>
+    <main class="shell">
+      <header class="masthead">
+        <a class="wordmark" href="https://github.com/dxnnystyles" aria-label="Danny Styles on GitHub">DS<span>/</span></a>
+        <a class="back-link" href="https://github.com/dxnnystyles">Profile <span aria-hidden="true">↗</span></a>
+      </header>
+
+      <section class="game" id="game-section" aria-labelledby="page-title">
+        <div class="playfield">
+          <div class="game-heading">
+            <div>
+              <h1 id="page-title">Chess, at the same table.</h1>
+              <p class="game-subtitle">Two players · One board</p>
+            </div>
+            <button class="quiet-button replay-open" id="replay-open" type="button">Replay the Opera Game</button>
+          </div>
+
+          <div class="player-bar" aria-label="Black to move" id="turn-bar">
+            <span class="turn-mark" aria-hidden="true"></span>
+            <span class="turn-copy" id="turn-copy">White to move</span>
+            <span class="check-label" id="check-label" hidden>Check</span>
+          </div>
+
+          <div class="board-frame" id="board-frame">
+            <div class="board" id="board" role="grid" aria-label="Chessboard, White to move"></div>
+          </div>
+          <p class="board-help" id="board-help">Choose a piece, then choose its destination. Use arrow keys to move around the board.</p>
+          <div class="live-region" id="announcer" aria-live="polite" aria-atomic="true"></div>
+        </div>
+
+        <aside class="notation" aria-label="Game details">
+          <div class="notation-head">
+            <span class="section-name">Current game</span>
+            <span class="save-state" id="save-state">Saved on this device</span>
+          </div>
+          <div class="material" id="material" aria-label="Captured pieces"></div>
+          <ol class="move-list" id="move-list" aria-label="Move list"></ol>
+          <div class="result" id="result" hidden></div>
+          <div class="controls">
+            <button class="primary-button" id="new-game" type="button">New game</button>
+            <button class="quiet-button draw-button" id="draw-agreement" type="button">Offer a draw</button>
+          </div>
+        </aside>
+      </section>
+
+      <section class="replay-panel" id="replay-panel" aria-labelledby="replay-title" hidden>
+        <div class="replay-heading">
+          <div>
+            <span class="section-name">Paris · 1858</span>
+            <h2 id="replay-title">The Opera Game</h2>
+            <p>Paul Morphy vs. Duke Karl and Count Isouard</p>
+          </div>
+          <button class="quiet-button" id="replay-close" type="button">Return to your game</button>
+        </div>
+        <div class="replay-controls" aria-label="Opera Game replay controls">
+          <button class="quiet-button" id="replay-start" type="button">Start</button>
+          <button class="icon-button" id="replay-back" type="button" aria-label="Step back one move">←</button>
+          <span id="replay-progress" aria-live="polite">Starting position</span>
+          <button class="icon-button" id="replay-next" type="button" aria-label="Step forward one move">→</button>
+          <button class="quiet-button" id="replay-reset" type="button">Restart</button>
+        </div>
+        <div class="replay-layout">
+          <div class="board-frame replay-frame"><div class="board" id="replay-board" role="grid" aria-label="Opera Game replay board"></div></div>
+          <ol class="move-list replay-moves" id="replay-moves" aria-label="Opera Game moves"></ol>
+        </div>
+      </section>
+
+      <footer class="footer"><span>Local game · Nothing leaves this browser</span><a href="https://github.com/dxnnystyles">Danny Styles</a></footer>
+    </main>
+
+    <dialog id="promotion-dialog" class="choice-dialog" aria-labelledby="promotion-title">
+      <form method="dialog"><h2 id="promotion-title">Choose a promotion</h2><p>A pawn has reached the final rank.</p><div id="promotion-options" class="promotion-options"></div></form>
+    </dialog>
+    <dialog id="recovery-dialog" class="choice-dialog" aria-labelledby="recovery-title">
+      <form method="dialog"><h2 id="recovery-title">Saved game unavailable</h2><p id="recovery-message">The saved game could not be restored. Start a fresh game to continue.</p><button class="primary-button" id="recovery-new" value="new">Start a fresh game</button></form>
+    </dialog>
+    <dialog id="new-game-dialog" class="choice-dialog" aria-labelledby="new-game-title">
+      <form method="dialog"><h2 id="new-game-title">Start a new game?</h2><p>Your current position and move list will be cleared.</p><div class="dialog-actions"><button class="quiet-button" value="cancel">Keep playing</button><button class="primary-button" id="confirm-new" value="new">Start new game</button></div></form>
+    </dialog>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
