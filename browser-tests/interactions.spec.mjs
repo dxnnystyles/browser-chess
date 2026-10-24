@@ -301,6 +301,8 @@ test('invalid saved state blocks play until a fresh game is chosen', { skip: !ca
   await context.addInitScript(() => localStorage.setItem('dxnnystyles.browser-chess.v1', '{broken'));
   const page = await context.newPage(); await page.goto(baseUrl);
   assert.equal(await page.locator('#recovery-dialog').evaluate((el) => el.open), true);
+  assert.equal(await page.locator('#recovery-message').textContent(), 'The saved game could not be read. Your saved data has been left unchanged. Start a fresh game to continue.');
+  assert.equal(await page.evaluate(() => localStorage.getItem('dxnnystyles.browser-chess.v1')), '{broken');
   await page.locator('#recovery-new').click();
   assert.match(await page.locator('#turn-copy').textContent(), /White to move/);
   assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem('dxnnystyles.browser-chess.v1')).moves), []);

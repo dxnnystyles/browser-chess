@@ -35,9 +35,9 @@ function loadSavedGame() {
     game = restoreGame(raw); outcome = game.savedOutcome ?? gameOutcome(game); pendingDrawOffer = game.savedDrawOffer;
     if (game.savedVersion === 1) persist();
   }
-  catch (error) {
+  catch {
     recoveryBlocked = true;
-    $('recovery-message').textContent = `${error.message} The saved data has been kept unchanged. Start a fresh game to continue.`;
+    $('recovery-message').textContent = 'The saved game could not be read. Your saved data has been left unchanged. Start a fresh game to continue.';
     $('recovery-dialog').showModal();
   }
 }
