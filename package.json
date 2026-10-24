@@ -10,7 +10,8 @@
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1",
     "test": "node --test",
-    "test:browser": "node --test browser-tests/interactions.spec.mjs"
+    "test:browser": "node --test browser-tests/interactions.spec.mjs",
+    "test:base-path": "node --test browser-tests/base-path.spec.mjs"
   },
   "repository": {
     "type": "git",

@@ -18,6 +18,7 @@ npm test
 npm run test:browser
 npm run dev
 npm run build
+npm run test:base-path
 ```
 
-The browser suite requires Playwright Chromium; install it with `npx playwright install chromium` if it is not already available. The built static site is written to `dist/`. The game does not use an account, server, analytics, or chess service. `chess.js` supplies legal-move and rules handling.
+The browser suite requires Playwright Chromium; install it with `npx playwright install chromium` if it is not already available. The built static site is written to `dist/`. Vite uses `/browser-chess/` as its base path for the GitHub Pages project-site candidate at `https://dxnnystyles.github.io/browser-chess/`; hosting is not enabled by this repository. The game does not use an account, server, analytics, or chess service. `chess.js` supplies legal-move and rules handling.
