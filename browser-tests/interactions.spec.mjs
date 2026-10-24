@@ -69,8 +69,24 @@ test('black chess-piece glyph fill keeps at least 3:1 contrast on dark squares',
     return { isDarkSquare: cell.classList.contains('dark'), backgroundColor, ratio: (background + 0.05) / (foreground + 0.05) };
   });
   assert.equal(measurement.isDarkSquare, true);
-  assert.equal(measurement.backgroundColor, 'rgb(113, 109, 101)');
+  assert.equal(measurement.backgroundColor, 'rgb(121, 115, 104)');
   assert.ok(measurement.ratio >= 3, `expected at least 3:1 contrast on the dark square, got ${measurement.ratio.toFixed(2)}:1`);
+  await context.close();
+});
+
+test('system light appearance uses its own warm palette with readable text and accent controls', { skip: !canLaunch && 'Chromium is not installed; set PLAYWRIGHT_CHROMIUM_EXECUTABLE.' }, async () => {
+  const { page, context } = await newPage({ colorScheme: 'light' });
+  const values = await page.evaluate(() => {
+    const style = getComputedStyle(document.documentElement);
+    return Object.fromEntries(['--page', '--ink', '--muted', '--accent', '--accent-ink'].map((key) => [key, style.getPropertyValue(key).trim()]));
+  });
+  const rgb = (value) => value.match(/[0-9a-f]{2}/gi).map((channel) => parseInt(channel, 16) / 255).map((channel) => channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4);
+  const luminance = (value) => { const [r, g, b] = rgb(value); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+  const ratio = (foreground, background) => { const [high, low] = [luminance(foreground), luminance(background)].sort((a, b) => b - a); return (high + 0.05) / (low + 0.05); };
+  assert.notEqual(values['--page'], '#17191a');
+  assert.ok(ratio(values['--ink'], values['--page']) >= 4.5);
+  assert.ok(ratio(values['--muted'], values['--page']) >= 4.5);
+  assert.ok(ratio(values['--accent-ink'], values['--accent']) >= 4.5);
   await context.close();
 });
 
@@ -252,6 +268,17 @@ test('a board move clears an unanswered draw offer', { skip: !canLaunch && 'Chro
 test('mobile board reflows without horizontal scrolling and supports touch play', { skip: !canLaunch && 'Chromium is not installed; set PLAYWRIGHT_CHROMIUM_EXECUTABLE.' }, async () => {
   const { page, context } = await newPage({ viewport: { width: 375, height: 812 }, isMobile: true, hasTouch: true });
   if (process.env.BROWSER_CHESS_MOBILE_SCREENSHOT) await page.screenshot({ path: process.env.BROWSER_CHESS_MOBILE_SCREENSHOT, fullPage: true });
+  for (const width of [390, 320]) {
+    await page.setViewportSize({ width, height: 844 });
+    const geometry = await page.locator('#board [data-square="a8"]').evaluate((square) => ({ cell: square.getBoundingClientRect().width, piece: parseFloat(getComputedStyle(square.querySelector('.piece')).fontSize) }));
+    assert.ok(geometry.piece <= geometry.cell * 0.75, `${width}px board pieces should leave clear space for coordinate labels`);
+    const rankOutsideBoard = await page.locator('#board [data-square="a8"] .rank-coord').evaluate((label) => label.getBoundingClientRect().right <= label.closest('[data-square]').getBoundingClientRect().left);
+    const fileOutsideBoard = await page.locator('#board [data-square="a1"] .file-coord').evaluate((label) => label.getBoundingClientRect().top >= label.closest('[data-square]').getBoundingClientRect().bottom);
+    assert.equal(rankOutsideBoard, true, 'rank coordinates should sit in the board frame gutter');
+    assert.equal(fileOutsideBoard, true, 'file coordinates should sit in the board frame gutter');
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+  }
+  await page.setViewportSize({ width: 375, height: 812 });
   await page.locator('#board [data-square="e2"]').tap();
   await page.locator('#board [data-square="e4"]').tap();
   assert.match(await page.locator('#turn-copy').textContent(), /Black to move/);
