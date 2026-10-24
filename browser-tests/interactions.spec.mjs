@@ -108,6 +108,36 @@ test('Opera replay is separate and leaves the saved match intact', { skip: !canL
   await context.close();
 });
 
+test('Opera replay play, pause, forward, back and restart preserve the active saved game', { skip: !canLaunch && 'Chromium is not installed; set PLAYWRIGHT_CHROMIUM_EXECUTABLE.' }, async () => {
+  const { page, context } = await newPage();
+  await page.locator('#board [data-square="e2"]').click(); await page.locator('#board [data-square="e4"]').click();
+  const savedGame = await page.evaluate(() => localStorage.getItem('dxnnystyles.browser-chess.v1'));
+  await page.getByRole('button', { name: 'Replay the Opera Game' }).click();
+
+  await page.locator('#replay-start').click();
+  await page.waitForFunction(() => document.querySelector('#replay-start')?.textContent === 'Pause' && document.querySelector('#replay-moves [aria-current="step"]')?.textContent === 'e4', null, { timeout: 5000 });
+  await page.locator('#replay-start').click();
+  assert.equal(await page.locator('#replay-start').textContent(), 'Play');
+  await page.waitForTimeout(1200);
+  assert.equal(await page.locator('#replay-moves [aria-current="step"]').textContent(), 'e4');
+
+  await page.locator('#replay-next').click();
+  assert.equal(await page.locator('#replay-moves [aria-current="step"]').textContent(), 'e5');
+  await page.locator('#replay-back').click();
+  assert.equal(await page.locator('#replay-moves [aria-current="step"]').textContent(), 'e4');
+  await page.locator('#replay-reset').click();
+  assert.match(await page.locator('#replay-progress').textContent(), /Starting position/);
+  assert.equal(await page.locator('#replay-moves [aria-current="step"]').count(), 0);
+  assert.equal(await page.locator('#replay-back').isDisabled(), true);
+  assert.equal(await page.evaluate(() => localStorage.getItem('dxnnystyles.browser-chess.v1')), savedGame);
+
+  await page.getByRole('button', { name: 'Return to your game' }).click();
+  assert.match(await page.locator('#turn-copy').textContent(), /Black to move/);
+  assert.match(await page.locator('#board [data-square="e4"]').getAttribute('aria-label'), /White pawn/);
+  assert.equal(await page.evaluate(() => localStorage.getItem('dxnnystyles.browser-chess.v1')), savedGame);
+  await context.close();
+});
+
 test('mobile board reflows without horizontal scrolling and supports touch play', { skip: !canLaunch && 'Chromium is not installed; set PLAYWRIGHT_CHROMIUM_EXECUTABLE.' }, async () => {
   const { page, context } = await newPage({ viewport: { width: 375, height: 812 }, isMobile: true, hasTouch: true });
   if (process.env.BROWSER_CHESS_MOBILE_SCREENSHOT) await page.screenshot({ path: process.env.BROWSER_CHESS_MOBILE_SCREENSHOT, fullPage: true });
