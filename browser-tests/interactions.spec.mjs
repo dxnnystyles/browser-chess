@@ -28,6 +28,7 @@ async function newPage(options = {}) {
 
 test('pointer moves a legal pawn and a reload restores the position', { skip: !canLaunch && 'Chromium is not installed; set PLAYWRIGHT_CHROMIUM_EXECUTABLE.' }, async () => {
   const { page, context } = await newPage();
+  assert.equal(await page.locator('.rules-disclosure').textContent(), 'Automatic insufficient-material draws are supported, but some positions where neither side can possibly checkmate may not be recognized.');
   assert.equal(await page.locator('#board [data-square]').count(), 64);
   if (process.env.BROWSER_CHESS_SCREENSHOT) await page.screenshot({ path: process.env.BROWSER_CHESS_SCREENSHOT, fullPage: true });
   await page.locator('#board [data-square="e2"]').click();
